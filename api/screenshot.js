@@ -1,84 +1,87 @@
-// api/screenshot.js
-// Vercel Serverless Function - Puppeteer Screenshot API
-
 const chromium = require('chrome-aws-lambda');
+const puppeteer = require('puppeteer-core');
 
 module.exports = async (req, res) => {
-  // CORS 헤더
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  // OPTIONS 요청 처리
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
-  // POST만 허용
+  // Only allow POST requests
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { html, viewport_width = 1920, viewport_height = 1080, device_scale = 2 } = req.body;
+    // Get parameters from request body
+    const { 
+      html,
+      url,
+      viewport_width = 1920, 
+      viewport_height = 1080, 
+      device_scale = 2 
+    } = req.body;
 
-    if (!html) {
-      return res.status(400).json({ error: 'HTML content is required' });
+    // Validate - either html or url must be provided
+    if (!html && !url) {
+      return res.status(400).json({ 
+        error: 'Either html or url parameter is required' 
+      });
     }
 
-    console.log('Starting Puppeteer...');
-
-    // Puppeteer 실행
-    const browser = await chromium.puppeteer.launch({
+    // Launch browser
+    const browser = await puppeteer.launch({
       args: chromium.args,
-      defaultViewport: {
-        width: parseInt(viewport_width),
-        height: parseInt(viewport_height),
-        deviceScaleFactor: parseInt(device_scale)
-      },
       executablePath: await chromium.executablePath,
-      headless: chromium.headless
+      headless: chromium.headless,
     });
-
-    console.log('Browser launched');
 
     const page = await browser.newPage();
 
-    // HTML 컨텐츠 설정
-    await page.setContent(html, {
-      waitUntil: ['networkidle0', 'load']
+    // Set viewport
+    await page.setViewport({
+      width: viewport_width,
+      height: viewport_height,
+      deviceScaleFactor: device_scale,
     });
 
-    console.log('Page loaded, taking screenshot...');
+    // Load content - either from URL or HTML
+    if (url) {
+      console.log('Loading URL:', url);
+      await page.goto(url, { 
+        waitUntil: ['networkidle0', 'domcontentloaded'],
+        timeout: 30000 
+      });
+    } else {
+      console.log('Setting HTML content');
+      await page.setContent(html, { 
+        waitUntil: ['networkidle0', 'domcontentloaded'],
+        timeout: 30000 
+      });
+    }
 
-    // 스크린샷 촬영
+    // Take screenshot
     const screenshot = await page.screenshot({
       type: 'png',
-      fullPage: false,
-      omitBackground: false
+      encoding: 'base64',
+      fullPage: false
     });
 
     await browser.close();
 
-    console.log('Screenshot complete');
+    // Set CORS headers
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Content-Type', 'application/json');
 
-    // Base64로 인코딩
-    const base64Image = screenshot.toString('base64');
-
-    // 응답
+    // Return base64 image
     return res.status(200).json({
+      image: screenshot,
       success: true,
-      image: base64Image,
-      mimeType: 'image/png',
-      width: viewport_width,
-      height: viewport_height
+      source: url ? 'url' : 'html'
     });
 
   } catch (error) {
     console.error('Screenshot error:', error);
     return res.status(500).json({
-      error: 'Screenshot generation failed',
-      message: error.message
+      error: error.message,
+      success: false
     });
   }
 };
