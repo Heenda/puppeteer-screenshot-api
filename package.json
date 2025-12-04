@@ -1,15 +1,11 @@
 {
   "name": "puppeteer-screenshot-api",
   "version": "1.0.0",
-  "description": "Serverless Puppeteer Screenshot API on Vercel",
+  "description": "Serverless Puppeteer Screenshot API",
   "main": "api/screenshot.js",
-  "scripts": {
-    "dev": "vercel dev",
-    "deploy": "vercel --prod"
-  },
   "dependencies": {
-    "chrome-aws-lambda": "^10.1.0",
-    "puppeteer-core": "^10.1.0"
+    "@sparticuz/chromium": "^119.0.0",
+    "puppeteer-core": "^21.0.0"
   },
   "engines": {
     "node": "20.x"
